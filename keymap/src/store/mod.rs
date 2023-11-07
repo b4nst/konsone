@@ -69,7 +69,7 @@ impl Store {
         // Store to file if last event is older than 10 minutes.
         match self.last_save.elapsed() {
             Ok(elapsed) => {
-                if elapsed.as_secs() > 10 {
+                if elapsed.as_secs() > 600 {
                     self.save().unwrap_or_else(|err| {
                         warn!("Error saving: {}", err);
                     })
