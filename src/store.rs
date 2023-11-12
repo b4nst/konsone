@@ -1,43 +1,60 @@
-use crate::ngrams::Buffer;
+use std::collections::HashMap;
+use std::fs::File;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::error::Error;
+
 use log::{info, warn};
 use rdev::{Event, EventType, Key};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
+use crate::tribuf::Buffer;
+use crate::corpus::{Keystroke, KeystrokeHeatmap, BigramHeatmap, TrigramHeatmap};
+
+/// Store for keypresses.
 #[derive(Serialize, Deserialize)]
 pub struct Store {
-    pub heatmap: HashMap<Keystroke, u32>,
-    pub bigram: HashMap<(Keystroke, Keystroke), u32>,
-    pub trigram: HashMap<(Keystroke, Keystroke, Keystroke), u32>,
+    /// Heatmap of keypresses.
+    pub heatmap: KeystrokeHeatmap,
+    /// Heatmap of bigrams.
+    pub bigram: BigramHeatmap,
+    /// Heatmap of trigrams.
+    pub trigram: TrigramHeatmap,
 
     ngrams: Buffer<EventWrapper>,
     last_save: std::time::SystemTime,
     filename: String,
 }
 
-#[derive(Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
-pub struct Keystroke {
-    pub key: Key,
-    pub interpreted: String,
-}
-
 impl Store {
+    /// Create a new store.
     pub fn new(filename: String) -> Store {
         Store {
             heatmap: HashMap::new(),
             bigram: HashMap::new(),
             trigram: HashMap::new(),
             ngrams: Buffer::<EventWrapper>::new(),
-            last_save: std::time::SystemTime::now(),
+            last_save: SystemTime::now(),
             filename: filename,
         }
     }
 
+    /// Process a device event.
     pub fn process_event(&mut self, e: Event) {
         match e.event_type {
             EventType::KeyPress(_) => self.update(EventWrapper(e)),
             _ => return,
         }
+    }
+
+    /// Save the store to the filesystem.
+    pub fn save(&mut self) -> Result<(), Box<dyn Error>> {
+        info!("Saving to {}", self.filename);
+
+        let file = File::create(&self.filename)?;
+        serde_bare::to_writer(file, &self)?;
+
+        self.last_save = std::time::SystemTime::now();
+        Ok(())
     }
 
     fn update(&mut self, ew: EventWrapper) {
@@ -84,16 +101,6 @@ impl Store {
         }
     }
 
-    pub fn save(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        info!("Saving to {}", self.filename);
-
-        let file = std::fs::File::create(&self.filename)?;
-        serde_bare::to_writer(file, &self)?;
-
-        self.last_save = std::time::SystemTime::now();
-        Ok(())
-    }
-
     fn update_heatmap(&mut self, e: &Event) {
         let ks = event_to_keystroke(e);
         let count = self.heatmap.entry(ks).or_insert(0);
@@ -116,7 +123,8 @@ impl Store {
     }
 }
 
-pub fn load<R>(rdr: R) -> Result<Store, Box<dyn std::error::Error>>
+/// Load a store from a reader.
+pub fn load<R>(rdr: R) -> Result<Store, Box<dyn Error>>
 where
     R: std::io::Read,
 {
@@ -135,13 +143,14 @@ fn event_to_keystroke(e: &Event) -> Keystroke {
     }
 }
 
+/// Wrapper for an event to allow for Default trait implementation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct EventWrapper(Event);
 
 impl Default for EventWrapper {
     fn default() -> Self {
         EventWrapper(Event {
-            time: std::time::UNIX_EPOCH,
+            time: UNIX_EPOCH,
             event_type: EventType::KeyPress(Key::Unknown(0)),
             name: None,
         })
