@@ -60,8 +60,8 @@ fn log(filename: String) {
 }
 
 fn generate(filename: String) {
-    let store = load(File::open(&filename).unwrap()).unwrap();
-    let mut outf = File::create("data.txt").expect("creation failed");
+    let store = load(File::open(&filename).expect("unable to open db")).expect("unable to load db");
+    let mut outf = File::create("corpus.dat").expect("creation failed");
 
     let corpus = Generator::new(&store.heatmap, &store.bigram, &store.trigram);
 

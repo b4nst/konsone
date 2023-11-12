@@ -27,10 +27,10 @@ pub type BigramHeatmap = HashMap<(Keystroke, Keystroke), KeystrokeCount>;
 /// A trigram heatmap is a map of trigrams to the number of times they have been pressed.
 pub type TrigramHeatmap = HashMap<(Keystroke, Keystroke, Keystroke), KeystrokeCount>;
 
-/// A generator is a Keystroke generator
+/// A generator is a pseudo random Keystroke generator based on typing heatmaps.
 #[derive(Clone, Debug)]
 pub struct Generator {
-    /// The list of all keystrokes 
+    /// The list of all keystrokes
     keystrokes: Vec<Keystroke>,
     /// The weights of each keystroke
     weights: Vec<u32>,
@@ -46,7 +46,12 @@ pub struct Generator {
 
 impl Generator {
     /// Create a new generator from heatmaps.
-    pub fn new(keystrokes: &KeystrokeHeatmap, bigrams: &BigramHeatmap, trigrams: &TrigramHeatmap) -> Generator {
+    pub fn new(
+        keystrokes: &KeystrokeHeatmap,
+        bigrams: &BigramHeatmap,
+        trigrams: &TrigramHeatmap,
+    ) -> Generator {
+        // Unzip the keystrokes and weights
         let (keys, weights): (Vec<_>, Vec<_>) = keystrokes.clone().into_iter().unzip();
         let keylookup: HashMap<Keystroke, usize> = keys
             .iter()
@@ -71,9 +76,9 @@ impl Generator {
 
         Generator {
             keystrokes: keys,
-            weights: weights,
-            bigram_lookup: bigram_lookup,
-            trigram_lookup: trigram_lookup,
+            weights,
+            bigram_lookup,
+            trigram_lookup,
             preceeding: [None, None],
             rng: rand::thread_rng(),
         }
@@ -100,7 +105,7 @@ impl Generator {
                 .for_each(|(i, w)| weights[*i] += w);
         }
         // generate weighted index
-        let weighted_index = WeightedIndex::new(&weights).unwrap();
+        let weighted_index = WeightedIndex::new(&weights).expect("weights index should be valid");
 
         // generate the next index
         let index = weighted_index.sample(&mut self.rng);
